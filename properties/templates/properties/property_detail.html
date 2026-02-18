@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ property.title }} - Property Details</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .back-link {
+            margin-bottom: 20px;
+        }
+        .back-link a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+        .price {
+            font-size: 2em;
+            color: #27ae60;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .location {
+            font-size: 1.2em;
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+        .details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .detail-item {
+            text-align: center;
+        }
+        .detail-label {
+            font-size: 0.9em;
+            color: #7f8c8d;
+        }
+        .detail-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .description {
+            line-height: 1.8;
+            color: #555;
+            margin: 20px 0;
+            padding: 20px 0;
+            border-top: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+        }
+        .cache-info {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            margin-right: 5px;
+        }
+        .badge-expensive {
+            background: #e74c3c;
+            color: white;
+        }
+        .badge-type {
+            background: #3498db;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="back-link">
+            <a href="{% url 'properties:property_list_html' %}">← Back to listings</a>
+        </div>
+        
+        <h1>{{ property.title }}</h1>
+        
+        <div>
+            <span class="badge badge-type">{{ property.get_property_type_display }}</span>
+            {% if property.is_expensive %}
+            <span class="badge badge-expensive">Premium Property</span>
+            {% endif %}
+        </div>
+        
+        <div class="price">{{ property.formatted_price }}</div>
+        <div class="location">📍 {{ property.location }}</div>
+        
+        <div class="details">
+            <div class="detail-item">
+                <div class="detail-label">Bedrooms</div>
+                <div class="detail-value">{{ property.bedrooms }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Bathrooms</div>
+                <div class="detail-value">{{ property.bathrooms }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Square Feet</div>
+                <div class="detail-value">{{ property.square_feet|default:"N/A" }}</div>
+            </div>
+        </div>
+        
+        <div class="description">
+            {{ property.description }}
+        </div>
+        
+        <div class="cache-info">
+            <strong>Cache Information:</strong><br>
+            Status: {{ cache_status }}<br>
+            Property ID: {{ property.id }}<br>
+            Cache Key: 'property_{{ property.id }}'<br>
+            {% if cache_status == 'HIT' %}
+            ✅ Data retrieved from Redis cache
+            {% else %}
+            🔄 Data retrieved from PostgreSQL database
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
