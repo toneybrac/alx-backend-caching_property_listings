@@ -1,108 +1,128 @@
-from django.shortcuts import render
+# properties/views.py
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse
 from django.views.decorators.cache import cache_page
+from django.core.cache import cache
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import status
-from .models import Property
-from .serializers import PropertySerializer
 import logging
 
-# Setup logger
+from .models import Property
+from .utils import get_all_properties, get_property_by_id  # Fixed import
+from .serializers import PropertySerializer
+
 logger = logging.getLogger(__name__)
 
-@api_view(['GET'])
-@cache_page(60 * 15)  # Cache for 15 minutes (60 seconds * 15)
-def property_list(request):
-    """
-    View to list all properties with Redis caching for 15 minutes.
-    """
-    try:
-        # Log cache hit/miss (this will help with debugging)
-        logger.info(f"Property list view accessed. Cache key: {request.get_full_path()}")
-        
-        # Get all active properties
-        properties = Property.objects.filter(is_active=True).order_by('-created_at')
-        
-        # Serialize the data
-        serializer = PropertySerializer(properties, many=True)
-        
-        # Log the number of properties returned
-        logger.info(f"Returning {len(properties)} properties from property_list view")
-        
-        # Return the response (will be cached by @cache_page)
-        return Response({
-            'success': True,
-            'count': len(properties),
-            'data': serializer.data,
-            'message': 'Properties retrieved successfully',
-            'cache_info': 'This response is cached for 15 minutes'
-        }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        logger.error(f"Error in property_list view: {str(e)}")
-        return Response({
-            'success': False,
-            'error': str(e),
-            'message': 'Failed to retrieve properties'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-# Alternative view without DRF (if you're not using Django REST Framework)
-from django.http import JsonResponse
-import json
-
-@cache_page(60 * 15)  # Cache for 15 minutes
-def property_list_json(request):
-    """
-    Alternative view using Django's JsonResponse (without DRF)
-    """
-    try:
-        # Get all active properties
-        properties = Property.objects.filter(is_active=True).order_by('-created_at')
-        
-        # Prepare data for JSON response
-        properties_data = []
-        for property in properties:
-            properties_data.append({
-                'id': str(property.id),
-                'title': property.title,
-                'description': property.description,
-                'price': str(property.price),
-                'location': property.location,
-                'bedrooms': property.bedrooms,
-                'bathrooms': str(property.bathrooms),
-                'property_type': property.property_type,
-                'square_feet': property.square_feet,
-                'created_at': property.created_at.isoformat(),
-                'is_active': property.is_active,
-            })
-        
-        # Create response data
-        response_data = {
-            'success': True,
-            'count': len(properties_data),
-            'properties': properties_data,
-            'cache_info': 'This response is cached for 15 minutes'
-        }
-        
-        return JsonResponse(response_data, safe=False)
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e),
-            'message': 'Failed to retrieve properties'
-        }, status=500)
-
-
-# Simple HTML view (if you want a template-based view)
 @cache_page(60 * 15)
 def property_list_html(request):
     """
-    Template-based view for property listing
+    HTML view to display all properties with both view-level and low-level caching
     """
-    properties = Property.objects.filter(is_active=True).order_by('-created_at')
-    return render(request, 'properties/list.html', {
+    # This uses the low-level caching from utils.py
+    properties = get_all_properties()  # Fixed function name
+    
+    # Check cache status for logging
+    cache_status = 'HIT' if cache.get('all_properties') else 'MISS'
+    logger.info(f"Property list view - Cache {cache_status}")
+    
+    context = {
         'properties': properties,
+        'cache_status': cache_status,
         'cache_duration': '15 minutes'
+    }
+    return render(request, 'properties/property_list.html', context)
+
+@api_view(['GET'])
+@cache_page(60 * 15)
+def property_list(request):
+    """
+    DRF API view to return all properties as JSON
+    """
+    properties = get_all_properties()  # Fixed function name
+    serializer = PropertySerializer(properties, many=True)
+    
+    cache_status = 'HIT' if cache.get('all_properties') else 'MISS'
+    
+    return Response({
+        'status': 'success',
+        'cache_status': cache_status,
+        'count': len(serializer.data),
+        'data': serializer.data
     })
+
+def property_list_json(request):
+    """
+    JSON view without DRF, using low-level caching
+    """
+    properties = get_all_properties()  # Fixed function name
+    
+    # Convert to JSON serializable format
+    properties_data = []
+    for prop in properties:
+        properties_data.append({
+            'id': str(prop.id),
+            'title': prop.title,
+            'description': prop.description,
+            'price': float(prop.price),
+            'location': prop.location,
+            'created_at': prop.created_at.isoformat(),
+            'property_type': prop.property_type,
+            'bedrooms': prop.bedrooms,
+            'bathrooms': float(prop.bathrooms),
+            'square_feet': prop.square_feet,
+            'is_active': prop.is_active,
+            'formatted_price': prop.formatted_price(),
+            'is_expensive': prop.is_expensive()
+        })
+    
+    cache_status = 'HIT' if cache.get('all_properties') else 'MISS'
+    
+    return JsonResponse({
+        'status': 'success',
+        'cache_status': cache_status,
+        'count': len(properties_data),
+        'data': properties_data
+    })
+
+@cache_page(60 * 10)
+def property_detail(request, property_id):
+    """
+    View to display a single property with caching
+    """
+    property_obj = get_property_by_id(property_id)
+    
+    if not property_obj:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Property not found'
+        }, status=404)
+    
+    cache_status = 'HIT' if cache.get(f'property_{property_id}') else 'MISS'
+    
+    if request.path.endswith('/json/') or request.headers.get('Accept') == 'application/json':
+        data = {
+            'id': str(property_obj.id),
+            'title': property_obj.title,
+            'description': property_obj.description,
+            'price': float(property_obj.price),
+            'location': property_obj.location,
+            'created_at': property_obj.created_at.isoformat(),
+            'property_type': property_obj.property_type,
+            'bedrooms': property_obj.bedrooms,
+            'bathrooms': float(property_obj.bathrooms),
+            'square_feet': property_obj.square_feet,
+            'is_active': property_obj.is_active,
+            'formatted_price': property_obj.formatted_price(),
+            'is_expensive': property_obj.is_expensive()
+        }
+        return JsonResponse({
+            'status': 'success',
+            'cache_status': cache_status,
+            'data': data
+        })
+    else:
+        context = {
+            'property': property_obj,
+            'cache_status': cache_status
+        }
+        return render(request, 'properties/property_detail.html', context)

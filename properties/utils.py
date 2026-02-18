@@ -1,3 +1,4 @@
+
 # properties/utils.py
 from django.core.cache import cache
 from django.db.models import QuerySet
@@ -26,20 +27,16 @@ def get_all_properties() -> QuerySet:
         # Cache miss - fetch from database
         logger.info(f"CACHE MISS: {cache_key} - Fetching all properties from database")
         
-        # Fetch from database with select_related if you have relations, otherwise just all()
-        properties = Property.objects.all()
-        
-        # Evaluate the queryset and store in cache
-        # Note: We need to evaluate it to store the actual data
-        property_list = list(properties)
+        # Fetch from database
+        properties = list(Property.objects.all())
         
         # Store in cache for 1 hour (3600 seconds)
-        cache.set(cache_key, property_list, 3600)
+        cache.set(cache_key, properties, 3600)
         
-        logger.info(f"CACHE SET: {cache_key} - Stored {len(property_list)} properties in cache for 3600 seconds")
+        logger.info(f"CACHE SET: {cache_key} - Stored {len(properties)} properties in cache for 3600 seconds")
         
-        # Return queryset for further filtering if needed
-        return Property.objects.filter(id__in=[p.id for p in property_list])
+        # Return queryset
+        return Property.objects.all()
     else:
         # Cache hit
         logger.info(f"CACHE HIT: {cache_key} - Retrieved {len(properties)} properties from cache")
@@ -111,11 +108,10 @@ def get_active_properties() -> QuerySet:
     
     if properties is None:
         logger.info(f"CACHE MISS: {cache_key} - Fetching active properties")
-        properties = Property.objects.filter(is_active=True)
-        property_list = list(properties)
-        cache.set(cache_key, property_list, 1800)  # 30 minutes cache
-        logger.info(f"CACHE SET: {cache_key} - Stored {len(property_list)} active properties")
-        return Property.objects.filter(id__in=[p.id for p in property_list])
+        properties = list(Property.objects.filter(is_active=True))
+        cache.set(cache_key, properties, 1800)  # 30 minutes cache
+        logger.info(f"CACHE SET: {cache_key} - Stored {len(properties)} active properties")
+        return Property.objects.filter(id__in=[p.id for p in properties])
     else:
         logger.info(f"CACHE HIT: {cache_key} - Retrieved {len(properties)} active properties")
         return Property.objects.filter(id__in=[p.id for p in properties])
@@ -129,11 +125,10 @@ def get_properties_by_location(location: str) -> QuerySet:
     
     if properties is None:
         logger.info(f"CACHE MISS: {cache_key} - Fetching properties in {location}")
-        properties = Property.objects.filter(location__icontains=location)
-        property_list = list(properties)
-        cache.set(cache_key, property_list, 1800)  # 30 minutes
-        logger.info(f"CACHE SET: {cache_key} - Stored {len(property_list)} properties")
-        return Property.objects.filter(id__in=[p.id for p in property_list])
+        properties = list(Property.objects.filter(location__icontains=location))
+        cache.set(cache_key, properties, 1800)  # 30 minutes
+        logger.info(f"CACHE SET: {cache_key} - Stored {len(properties)} properties")
+        return Property.objects.filter(id__in=[p.id for p in properties])
     else:
         logger.info(f"CACHE HIT: {cache_key} - Retrieved {len(properties)} properties")
         return Property.objects.filter(id__in=[p.id for p in properties])
