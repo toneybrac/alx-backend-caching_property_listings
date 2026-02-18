@@ -2,9 +2,10 @@
 # properties/utils.py
 from django.core.cache import cache
 from django.db.models import QuerySet
+from django_redis import get_redis_connection
 from .models import Property
 import logging
-from typing import Union, Optional
+from typing import Union, Optional, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,49 @@ def get_all_properties() -> QuerySet:
         # Return queryset with the cached IDs
         property_ids = [p.id for p in properties]
         return Property.objects.filter(id__in=property_ids)
+
+def get_redis_cache_metrics() -> Dict:
+    """
+    Retrieve Redis cache hit/miss metrics.
+    Connects to Redis via django_redis, gets keyspace_hits and keyspace_misses from INFO stats,
+    calculates hit ratio, logs metrics, and returns a dictionary.
+    
+    Returns:
+        dict: Dictionary containing hits, misses, and hit_ratio
+    """
+    try:
+        # Connect to Redis via django_redis
+        redis_conn = get_redis_connection("default")
+        
+        # Get Redis INFO statistics
+        info = redis_conn.info()
+        
+        # Extract keyspace hits and misses
+        keyspace_hits = info.get('keyspace_hits', 0)
+        keyspace_misses = info.get('keyspace_misses', 0)
+        
+        # Calculate total requests and hit ratio
+        total_requests = keyspace_hits + keyspace_misses
+        hit_ratio = (keyspace_hits / total_requests * 100) if total_requests > 0 else 0
+        
+        # Log metrics
+        logger.info(f"Redis Cache Metrics - Hits: {keyspace_hits}, Misses: {keyspace_misses}, Hit Ratio: {hit_ratio:.2f}%")
+        
+        # Return dictionary with metrics
+        return {
+            'hits': keyspace_hits,
+            'misses': keyspace_misses,
+            'hit_ratio': hit_ratio
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retrieving Redis cache metrics: {str(e)}")
+        return {
+            'hits': 0,
+            'misses': 0,
+            'hit_ratio': 0,
+            'error': str(e)
+        }
 
 def get_property_by_id(property_id: Union[str, int]) -> Optional[Property]:
     """
